@@ -89,7 +89,7 @@ export function createTerrain(c: Course, noiseTex: THREE.Texture): Terrain {
         vec3 rock = mix(cRockDark, cRock, smoothstep(0.30, 0.62, band));
         rock = mix(rock, cRockLit, smoothstep(0.60, 0.85, band) * 0.55);
         rock *= 0.90 + 0.22 * fine;
-        float bed = yy * 0.12 + band * 1.7;
+        float bed = yy * 0.16 + band * 1.7;
         float crack = smoothstep(0.06, 0.01, abs(fract(bed) - 0.5));
         float layer = floor(bed + 0.5);
         float lr = fract(sin(layer * 12.9898) * 43758.5453);
@@ -100,7 +100,14 @@ export function createTerrain(c: Course, noiseTex: THREE.Texture): Terrain {
         float joint = smoothstep(0.05, 0.01, abs(fract(run) - 0.5)) * steep;
         float blk = fract(sin((floor(run + 0.5) + layer * 17.0) * 78.233) * 43758.5453);
         rock *= 0.80 + 0.36 * blk * steep + 0.2 * (1.0 - steep);
-        rock *= 1.0 - 0.5 * max(crack, joint);
+        // each bed: sun-caught upper lip, shadowed undercut above the parting below, own tint
+        float fb = fract(bed + 0.5);
+        rock *= 1.0 + steep * (0.2 * smoothstep(0.72, 0.94, fb) - 0.42 * (1.0 - smoothstep(0.0, 0.2, fb)));
+        rock *= mix(vec3(1.14, 1.02, 0.88), vec3(0.74, 0.62, 0.64), lr * lr);
+        float sub = texture2D(tNoise, vec2(yy * 0.9, 0.63 + lr * 0.2)).r;
+        rock *= 1.0 - steep * 0.12 * smoothstep(0.55, 0.75, sub);
+        rock = mix(rock, cRockLit * vec3(1.12, 1.05, 0.95), step(0.82, lr) * steep * 0.45);
+        rock *= 1.0 - 0.6 * max(crack, joint);
         float up = smoothstep(0.45, 0.85, wn.y);
         rock = mix(rock, cRockLit * 1.02, up * 0.75);
         float g = vColor.r * smoothstep(0.35, 0.8, wn.y + (fine - 0.5) * 0.5);

@@ -3,26 +3,40 @@ import * as THREE from 'three';
 const vert = /* glsl */ `
 attribute vec2 aData; attribute vec3 aColor;
 uniform float uScale; uniform float uMaxPx;
-varying float vAlpha; varying vec3 vColor;
+varying float vAlpha; varying vec3 vColor; varying float vSeed; varying float vPx;
 void main() {
+  vSeed = fract(float(gl_VertexID) * 0.61803);
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mv;
   float px = aData.x * uScale / max(0.1, -mv.z);
   gl_PointSize = min(px, uMaxPx);
+  vPx = gl_PointSize;
   // spray right in front of the lens thins out instead of whiting out the frame
   vAlpha = aData.y * smoothstep(1.2, 4.0, -mv.z) * min(1.0, uMaxPx / max(px, 1.0));
   vColor = aColor;
 }`;
 const frag = /* glsl */ `
-varying float vAlpha; varying vec3 vColor;
+varying float vAlpha; varying vec3 vColor; varying float vSeed; varying float vPx;
 uniform float uSoft;
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vn(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + 1.0), f.x), f.y);
+}
 void main() {
   vec2 q = gl_PointCoord - 0.5;
   float d = length(q);
+  // big blobs become torn foam clumps; tiny ones stay round droplets
+  float lumpy = smoothstep(6.0, 26.0, vPx);
+  vec2 o = vec2(vSeed * 37.0, vSeed * 91.0);
+  float n = vn(q * 5.0 + o) * 0.65 + vn(q * 11.0 + o.yx) * 0.35;
+  d += (n - 0.5) * 0.32 * lumpy;
   float a = smoothstep(0.5, uSoft, d) * vAlpha;
+  a *= 1.0 - lumpy * 0.45 * smoothstep(0.55, 0.85, vn(q * 9.0 + o + 3.0)) * smoothstep(0.1, 0.35, d);
   if (a < 0.01) discard;
-  float shade = 0.86 + 0.14 * smoothstep(0.2, -0.4, q.y);
-  gl_FragColor = vec4(vColor * shade, a);
+  float shade = 0.8 + 0.2 * smoothstep(0.25, -0.35, q.y + (n - 0.5) * 0.2);
+  vec3 c = mix(vColor * vec3(0.78, 0.9, 0.95), vColor, shade);
+  gl_FragColor = vec4(c * (0.86 + 0.14 * shade), a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -194,7 +208,7 @@ export class SpraySheets {
 
   constructor(noiseTex: THREE.Texture) {
     const pos: number[] = [], uv: number[] = [], kind: number[] = [], idx: number[] = [];
-    const NU = 14, NV = 6;
+    const NU = 18, NV = 9;
     const sheet = (k: number, f: (u: number, v: number) => number[]) => {
       const base = pos.length / 3;
       for (let i = 0; i <= NU; i++) for (let j = 0; j <= NV; j++) {
@@ -210,15 +224,18 @@ export class SpraySheets {
       sheet(sg < 0 ? 0 : 1, (u, v) => {
         const x = 1.5 - u * 6.6;
         const grow = Math.pow(u, 0.75);
-        const reach = (0.5 + 3.6 * grow) * v;
-        const rise = Math.sin(Math.PI * Math.min(1, 0.12 + u * 1.25)) * (1.55 * v * (1.75 - v));
+        // the curtain climbs, then its lip rolls over outward like a breaking crest
+        const H = 1.85 * Math.sin(Math.PI * Math.min(1, 0.12 + u * 1.25));
+        const lip = Math.max(0, (v - 0.68) / 0.32);
+        const reach = (0.5 + 3.4 * grow) * v + (0.25 + 0.9 * grow) * lip * lip;
+        const rise = H * (Math.sin(0.5 * Math.PI * Math.min(1, v / 0.72)) - 0.55 * lip * lip * lip);
         return [x - v * 0.9 * grow, 0.02 + rise, sg * (1.02 + reach)];
       });
     }
     sheet(2, (u, v) => {
       const x = -3.0 - u * 6.5;
       const w = (0.35 + u * 1.5) * (v * 2 - 1);
-      return [x, 0.1 + Math.sin(Math.PI * Math.min(1, u * 1.15)) * 1.5 * (1 - 0.5 * Math.abs(v * 2 - 1)), w];
+      return [x, 0.1 + Math.sin(Math.PI * Math.min(1, u * 1.15)) * 2.0 * (1 - 0.5 * Math.abs(v * 2 - 1)), w];
     });
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -228,7 +245,7 @@ export class SpraySheets {
     this.u.tNoise.value = noiseTex;
     const m = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: this.u,
-      vertexShader: `attribute float aKind; uniform vec3 uAmp; varying vec2 vUv; varying float vAmp; varying float vKind;
+      vertexShader: `attribute float aKind; uniform vec3 uAmp; varying vec2 vUv; varying float vAmp; varying float vKind; varying vec3 vMv;
         void main(){
           vUv = uv; vKind = aKind;
           vAmp = aKind < 0.5 ? uAmp.x : aKind < 1.5 ? uAmp.y : uAmp.z;
@@ -237,19 +254,33 @@ export class SpraySheets {
           p.y *= vAmp; 
           if (aKind < 1.5) p.z = sign(p.z) * (1.02 + (abs(p.z) - 1.02) * s);
           else p.x = -3.0 + (p.x + 3.0) * s;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          vMv = mv.xyz;
+          gl_Position = projectionMatrix * mv;
         }`,
-      fragmentShader: `uniform sampler2D tNoise; uniform float uTime; varying vec2 vUv; varying float vAmp; varying float vKind;
+      fragmentShader: `uniform sampler2D tNoise; uniform float uTime; varying vec2 vUv; varying float vAmp; varying float vKind; varying vec3 vMv;
         void main(){
           float u = vUv.x, v = vUv.y;
           float across = vKind > 1.5 ? abs(v * 2.0 - 1.0) : v;
           float n = texture2D(tNoise, vec2(u * 1.6 + uTime * 1.9, across * 0.9 + vKind * 0.31)).r;
           float n2 = texture2D(tNoise, vec2(u * 4.5 + uTime * 3.6, across * 2.6)).b;
-          float body = vKind > 1.5 ? 0.95 - across * 0.9 - u * 0.75 : 1.25 - across * 1.15 - u * 0.55;
+          float body = vKind > 1.5 ? 0.95 - across * 0.9 - u * 0.75 : 1.3 - across * 0.75 - u * 0.6;
           float a = smoothstep(0.52, 0.66, body * 0.62 + n * 0.55 + n2 * 0.2 - 0.12);
+          // ragged fingers along the crest edge
+          float fr = texture2D(tNoise, vec2(u * 9.0 + uTime * 2.4, 0.37 + vKind * 0.2)).g;
+          a *= smoothstep(1.0, 0.72, across + fr * 0.28);
           a *= smoothstep(0.0, 0.06, u) * smoothstep(1.0, 0.72, u) * smoothstep(0.0, 0.25, vAmp);
           if (a < 0.02) discard;
-          vec3 col = mix(vec3(0.80, 0.93, 0.95), vec3(1.0), smoothstep(0.35, 0.7, n2 + across * 0.3));
+          // streaky white foam over a glassy turquoise body near the hull
+          float streak = texture2D(tNoise, vec2(u * 0.7 - uTime * 0.4, across * 5.0 + vKind)).r;
+          float foam = vKind > 1.5 ? 1.0 : smoothstep(0.18, 0.55, across + (streak - 0.5) * 0.5 + n2 * 0.25);
+          vec3 glass = vec3(0.42, 0.82, 0.86);
+          vec3 white = mix(vec3(0.82, 0.93, 0.96), vec3(1.0), smoothstep(0.35, 0.7, n2 + across * 0.3));
+          vec3 col = mix(glass, white, foam);
+          a *= mix(0.55, 1.0, foam);
+          // a curtain seen edge-on would collapse into a hard white line
+          vec3 fn = normalize(cross(dFdx(vMv), dFdy(vMv)));
+          a *= smoothstep(0.08, 0.35, abs(dot(fn, normalize(vMv))));
           gl_FragColor = vec4(col, a * 0.94);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

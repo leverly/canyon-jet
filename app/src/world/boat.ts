@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clamp, damp, lerp } from '../core/math';
 import { PAL } from './env';
 import { SpraySheets } from './fx';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { between, canvasTexture, MeshBuilder, trs } from './tex';
 
 export interface BoatColors { hull: number; hullLight: number; trim: number; panel: number; vest: number; shirt: number; hairA: number; hairB: number; badgeBg: string }
@@ -20,125 +21,159 @@ const DARK = 0x23252b;
 const DARK2 = 0x33363f;
 const SKIN = PAL.skin;
 
-interface Station { x: number; yk: number; yc: number; bc: number; yg: number; bg: number }
-const ST: Station[] = [
-  { x: -2.6, yk: -0.22, yc: 0.12, bc: 0.98, yg: 0.80, bg: 1.14 },
-  { x: -0.2, yk: -0.26, yc: 0.12, bc: 1.05, yg: 0.82, bg: 1.20 },
-  { x: 1.5, yk: -0.22, yc: 0.18, bc: 0.92, yg: 0.86, bg: 1.08 },
-  { x: 2.5, yk: -0.05, yc: 0.34, bc: 0.50, yg: 0.93, bg: 0.62 },
-];
-const STRIPE = 0.17;
+// Hull loft: transom at XS, stem at XT. Sections are swept from the keel up through a
+// rounded chine and a flared topside to a rolled gunwale.
+const XS = -2.6, XT = 3.15;
+const NXS = 30;
+const XB = -1.15, XF = 1.0, ZI = 0.82, FL = 0.24;
 
-function stationAt(x: number): Station {
-  for (let i = 0; i < ST.length - 1; i++) {
-    if (x <= ST[i + 1].x) {
-      const a = ST[i], b = ST[i + 1];
-      const t = clamp((x - a.x) / (b.x - a.x), 0, 1);
-      return { x, yk: lerp(a.yk, b.yk, t), yc: lerp(a.yc, b.yc, t), bc: lerp(a.bc, b.bc, t), yg: lerp(a.yg, b.yg, t), bg: lerp(a.bg, b.bg, t) };
-    }
-  }
-  return ST[ST.length - 1];
+function hullAt(x: number) {
+  const fb = clamp((x - 0.55) / (XT - 0.55), 0, 1);
+  const stern = clamp((-1.6 - x) / 1.0, 0, 1);
+  const bg = (1.17 - 0.05 * stern) * Math.sqrt(Math.max(0, 1 - fb * fb));
+  return { bg, yg: 0.84 + 0.2 * Math.pow(fb, 1.6), yc: 0.1 + 0.5 * fb * fb, yk: -0.25 + 0.62 * Math.pow(fb, 2.2) };
 }
-const K = (s: Station) => [s.x, s.yk, 0];
-const C = (s: Station, sg: number) => [s.x, s.yc, sg * s.bc];
-const T = (s: Station, sg: number) => [s.x, s.yc + STRIPE, sg * (s.bc + ((s.bg - s.bc) * STRIPE) / (s.yg - s.yc))];
-const G = (s: Station, sg: number) => [s.x, s.yg, sg * s.bg];
-const gun = (x: number, sg: number) => G(stationAt(x), sg);
+/** Section points for one side (sg = ±1), keel to inner gunwale rim. */
+function section(x: number, sg: number): number[][] {
+  const h = hullAt(x);
+  const bc = h.bg * 0.86, ys = h.yg - h.yc;
+  const side = (t: number, y: number) => [x, h.yc + ys * y, sg * lerp(bc, h.bg, 1 - (1 - t) * (1 - t))];
+  return [
+    [x, h.yk, 0],
+    [x, lerp(h.yk, h.yc, 0.62), sg * bc * 0.5],
+    [x, h.yc - 0.02, sg * bc * 0.92],
+    [x, h.yc + 0.03, sg * bc],
+    side(0.28, 0.24),
+    side(0.58, 0.54),
+    side(0.66, 0.61),
+    side(0.88, 0.82),
+    [x, h.yg - 0.07, sg * h.bg],
+    [x, h.yg + 0.02, sg * (h.bg - 0.035)],
+    [x, h.yg + 0.005, sg * Math.max(0, h.bg - 0.13)],
+  ];
+}
+const deckY = (x: number) => hullAt(x).yg + 0.005;
+const deckZ = (x: number) => Math.max(0, hullAt(x).bg - 0.13);
+
+/** Indexed grid surface with smooth normals, wound so normals agree with `out` at its centre. */
+function surface(nu: number, nv: number, f: (u: number, v: number) => number[], out: number[]) {
+  const pos: number[] = [], idx: number[] = [];
+  for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) pos.push(...f(i / nu, j / nv));
+  for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+    const a = i * (nv + 1) + j, b = a + nv + 1;
+    idx.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const n = g.getAttribute('normal');
+  const mid = Math.floor(nu / 2) * (nv + 1) + Math.floor(nv / 2);
+  if (n.getX(mid) * out[0] + n.getY(mid) * out[1] + n.getZ(mid) * out[2] < 0) {
+    for (let k = 0; k < idx.length; k += 3) { const t = idx[k + 1]; idx[k + 1] = idx[k + 2]; idx[k + 2] = t; }
+    g.setIndex(idx);
+    g.computeVertexNormals();
+  }
+  return g;
+}
 
 function buildBoatGeometry(col: BoatColors) {
   const mb = new MeshBuilder();
-  const IN = [0, 0.45, 0];
+  const chrome = new MeshBuilder();
+  const I = new THREE.Matrix4();
   const box = new THREE.BoxGeometry(1, 1, 1);
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 8);
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
   const cone = new THREE.ConeGeometry(1, 1, 6);
   const sph = new THREE.SphereGeometry(1, 14, 10);
+  const rbox = (w: number, h: number, d: number, r: number) => new RoundedBoxGeometry(w, h, d, 3, r);
   const bx = (x: number, y: number, z: number, sx: number, sy: number, sz: number, color: number, rx = 0, ry = 0, rz = 0) =>
     mb.add(box, color, trs(x, y, z, rx, ry, rz, sx, sy, sz));
+  const tube = (pts: number[][], r: number) => {
+    for (let i = 0; i < pts.length - 1; i++) chrome.add(cyl, 0xffffff, between(pts[i], pts[i + 1], r));
+    for (const p of pts) chrome.add(sph, 0xffffff, trs(p[0], p[1], p[2], 0, 0, 0, r));
+  };
 
-  // --- hull shell ---
-  const TIPC = [3.0, 0.62, 0], TIPT = [3.04, 0.74, 0], TIPG = [3.2, 1.0, 0];
+  // --- hull shell: dark bottom, blue waterline stripe, white pinline, orange topsides ---
+  const BANDS: [number, number, number][] = [[0, 3, DARK], [3, 5, col.trim], [5, 6, 0xf4f4f2], [6, 10, col.hull]];
+  const stationX = (u: number) => XS + (XT - XS) * (1 - Math.pow(1 - u, 1.25));
   for (const sg of [-1, 1]) {
-    for (let i = 0; i < ST.length - 1; i++) {
-      const a = ST[i], b = ST[i + 1];
-      mb.face([K(a), K(b), C(b, sg), C(a, sg)], DARK, IN);
-      mb.face([C(a, sg), C(b, sg), T(b, sg), T(a, sg)], col.trim, IN);
-      mb.face([T(a, sg), T(b, sg), G(b, sg), G(a, sg)], col.hull, IN);
+    for (const [k0, k1, c] of BANDS) {
+      mb.add(surface(NXS, k1 - k0, (u, v) => section(stationX(u), sg)[k0 + Math.round(v * (k1 - k0))], [0, 0, sg]), c, I);
     }
-    const l = ST[ST.length - 1];
-    mb.face([K(l), TIPC, C(l, sg)], DARK, IN);
-    mb.face([C(l, sg), TIPC, TIPT, T(l, sg)], col.trim, IN);
-    mb.face([T(l, sg), TIPT, TIPG, G(l, sg)], col.hull, IN);
   }
   // transom
-  const s0 = ST[0];
-  mb.face([G(s0, -1), G(s0, 1), C(s0, 1), C(s0, -1)], col.hull, IN);
-  mb.face([C(s0, -1), C(s0, 1), K(s0)], DARK, IN);
+  const L = section(XS, -1), R = section(XS, 1);
+  const TIN = [0, 0.45, 0];
+  for (const [k0, k1, c] of BANDS) for (let k = k0; k < k1; k++) mb.face([L[k], R[k], R[k + 1], L[k + 1]], c, TIN);
 
-  // --- decks ---
-  const XB = -1.15, XF = 1.0, ZI = 0.82, FL = 0.24, YG = 0.83;
-  mb.up([gun(-2.6, 1), gun(XB, 1), gun(XB, -1), gun(-2.6, -1)], col.hull);
+  // --- decks: crowned rear and fore decks, flat side decks along the cockpit ---
+  mb.add(surface(8, 10, (u, v) => { const x = lerp(XS, XB, u), w = v * 2 - 1; return [x, deckY(x) + 0.06 * (1 - w * w), w * deckZ(x)]; }, [0, 1, 0]), col.hull, I);
+  mb.add(surface(14, 10, (u, v) => { const x = lerp(XF, XT, u), w = v * 2 - 1; return [x, deckY(x) + 0.13 * (1 - w * w) * (1 - u * u), w * deckZ(x)]; }, [0, 1, 0]), col.hull, I);
   for (const sg of [-1, 1]) {
-    for (const [xa, xb] of [[XB, -0.2], [-0.2, XF]]) {
-      mb.up([gun(xa, sg), gun(xb, sg), [xb, stationAt(xb).yg, sg * ZI], [xa, stationAt(xa).yg, sg * ZI]], col.hull);
-    }
-    const g2 = gun(1.5, sg), g3 = gun(2.5, sg);
-    mb.up([g2, g3, [2.5, 1.0, 0], [1.5, 0.94, 0]], col.hullLight);
-    mb.up([g3, TIPG, [2.5, 1.0, 0]], col.hullLight);
+    mb.add(surface(10, 2, (u, v) => { const x = lerp(XB, XF, u); return [x, deckY(x), sg * lerp(ZI, deckZ(x), v)]; }, [0, 1, 0]), col.hull, I);
   }
-  mb.up([gun(XF, 1), gun(1.5, 1), [1.5, 0.94, 0], [XF, 0.9, 0]], col.hull);
-  mb.up([gun(XF, -1), gun(1.5, -1), [1.5, 0.94, 0], [XF, 0.9, 0]], col.hull);
+  // white deck pinline running back from the bow
+  for (const sg of [-1, 1]) {
+    const pts: number[][] = [];
+    for (let i = 0; i <= 8; i++) { const x = lerp(XF + 0.1, XT - 0.35, i / 8); pts.push([x, deckY(x) + 0.004, sg * deckZ(x) * 0.55]); }
+    for (let i = 0; i < pts.length - 1; i++) mb.add(box, 0xf4f4f2, between(pts[i], pts[i + 1], 1).multiply(new THREE.Matrix4().makeScale(0.035, 1, 0.012)));
+  }
 
   // --- cockpit ---
   const CIN = [-0.1, 0.6, 0];
-  for (const sg of [-1, 1]) mb.face([[XB, FL, sg * ZI], [XF, FL, sg * ZI], [XF, YG, sg * ZI], [XB, YG, sg * ZI]], DARK2, CIN, -1);
-  mb.face([[XB, FL, -ZI], [XB, FL, ZI], [XB, YG, ZI], [XB, YG, -ZI]], DARK2, CIN, -1);
-  mb.face([[XF, FL, -ZI], [XF, FL, ZI], [XF, 0.9, ZI], [XF, 0.9, -ZI]], DARK, CIN, -1);
+  const YW = 0.86;
+  for (const sg of [-1, 1]) mb.face([[XB, FL, sg * ZI], [XF, FL, sg * ZI], [XF, YW, sg * ZI], [XB, YW, sg * ZI]], DARK2, CIN, -1);
+  mb.face([[XB, FL, -ZI], [XB, FL, ZI], [XB, 0.92, ZI], [XB, 0.92, -ZI]], DARK2, CIN, -1);
+  mb.face([[XF, FL, -ZI], [XF, FL, ZI], [XF, 0.98, ZI], [XF, 0.98, -ZI]], DARK, CIN, -1);
   mb.up([[XB, FL, -ZI], [XF, FL, -ZI], [XF, FL, ZI], [XB, FL, ZI]], DARK);
-  // coaming trim
-  for (const sg of [-1, 1]) bx(-0.08, 0.875, sg * 0.84, 2.2, 0.07, 0.07, col.trim);
-  bx(XB - 0.02, 0.875, 0, 0.07, 0.07, 1.74, col.trim);
+  // padded coaming
+  for (const sg of [-1, 1]) mb.add(rbox(2.2, 0.09, 0.11, 0.04), col.trim, trs(-0.08, 0.875, sg * 0.84));
+  mb.add(rbox(0.11, 0.09, 1.78, 0.04), col.trim, trs(XB - 0.02, 0.9, 0));
   // cowl + windscreen
-  mb.add(box, col.hull, trs(1.22, 1.02, 0, 0, 0, 0.0, 0.46, 0.2, 1.7));
-  bx(0.98, 1.2, 0, 0.06, 0.36, 1.58, 0x1b2a3a, 0, 0, -0.42);
-  bx(0.91, 1.37, 0, 0.07, 0.05, 1.62, col.trim, 0, 0, -0.42);
+  mb.add(rbox(0.5, 0.22, 1.66, 0.09), col.hull, trs(1.22, 1.02, 0));
+  bx(0.98, 1.2, 0, 0.05, 0.34, 1.52, 0x1b2a3a, 0, 0, -0.42);
+  for (const sg of [-1, 1]) mb.add(rbox(0.08, 0.38, 0.06, 0.025), col.panel, trs(0.98, 1.2, sg * 0.78, 0, 0, -0.42));
   // console and handlebars
-  bx(0.84, 0.62, 0, 0.3, 0.5, 1.5, DARK);
+  mb.add(rbox(0.3, 0.52, 1.5, 0.06), DARK, trs(0.84, 0.62, 0));
   for (const z of [-0.42, 0.42]) {
     mb.add(cyl, DARK2, between([0.82, 0.86, z], [0.62, 1.06, z], 0.035));
     mb.add(cyl, 0x111216, between([0.62, 1.06, z - 0.27], [0.62, 1.06, z + 0.27], 0.03));
   }
   // seats
   for (const z of [-0.42, 0.42]) {
-    bx(-0.42, 0.36, z, 0.62, 0.24, 0.62, DARK2);
-    bx(-0.86, 0.72, z, 0.16, 0.74, 0.6, 0x3c3f49, 0, 0, 0.12);
-    bx(-0.9, 1.1, z, 0.17, 0.08, 0.62, col.panel, 0, 0, 0.12);
+    mb.add(rbox(0.62, 0.24, 0.62, 0.08), DARK2, trs(-0.42, 0.36, z));
+    mb.add(rbox(0.16, 0.74, 0.6, 0.06), 0x3c3f49, trs(-0.86, 0.72, z, 0, 0, 0.12));
+    mb.add(rbox(0.17, 0.09, 0.62, 0.04), col.panel, trs(-0.9, 1.1, z, 0, 0, 0.12));
   }
-  // engine hatch on the rear deck
-  bx(-1.86, 0.87, 0, 1.06, 0.12, 1.3, col.hullLight);
-  for (const z of [-0.3, 0, 0.3]) bx(-1.86, 0.935, z, 0.56, 0.02, 0.12, DARK2);
-  // stern jet housing
-  bx(-2.76, 0.36, 0, 0.4, 0.5, 0.94, col.panel);
-  bx(-2.74, 0.63, 0, 0.36, 0.06, 0.78, 0xe6e6ea);
-  bx(-2.975, 0.33, 0, 0.05, 0.36, 0.7, 0x15161a);
-  bx(-2.99, 0.31, 0, 0.1, 0.2, 0.36, 0x2c2f37);
-  bx(-2.8, 0.06, 0, 0.42, 0.12, 0.88, DARK);
+  // rear deck vents
+  for (const sg of [-1, 1]) {
+    mb.add(rbox(0.5, 0.05, 0.22, 0.02), col.panel, trs(-2.0, 0.93, sg * 0.42));
+    for (const dx of [-0.12, 0, 0.12]) bx(-2.0 + dx, 0.955, sg * 0.42, 0.05, 0.012, 0.16, DARK2);
+  }
+  // stern jet unit: rounded housing, cap, louvres and a recessed nozzle
+  mb.add(rbox(0.46, 0.54, 0.98, 0.1), 0xa7abb5, trs(-2.82, 0.36, 0));
+  mb.add(rbox(0.5, 0.08, 1.02, 0.035), 0xc8cbd2, trs(-2.8, 0.66, 0));
+  for (const y of [0.47, 0.54]) bx(-3.052, y, 0, 0.012, 0.03, 0.62, 0x2c2f37);
+  mb.add(cyl, 0x2c2f37, between([-3.0, 0.26, 0], [-3.1, 0.26, 0], 0.2));
+  mb.add(cyl, 0x0d0e12, between([-3.09, 0.26, 0], [-3.111, 0.26, 0], 0.15));
+  mb.add(rbox(0.5, 0.12, 0.9, 0.05), DARK, trs(-2.84, 0.06, 0));
   // stern corner steps
   for (const sg of [-1, 1]) {
-    bx(-2.74, 0.21, sg * 0.82, 0.36, 0.1, 0.46, col.panel);
-    bx(-2.74, 0.275, sg * 0.82, 0.37, 0.035, 0.47, col.trim);
+    mb.add(rbox(0.38, 0.11, 0.42, 0.04), col.panel, trs(-2.78, 0.2, sg * 0.82));
+    mb.add(rbox(0.39, 0.04, 0.43, 0.015), col.trim, trs(-2.78, 0.27, sg * 0.82));
   }
-  // side plates and grab rails
+  // side plate near the stern, following the topside flare
+  for (const sg of [-1, 1]) mb.add(rbox(0.62, 0.2, 0.04, 0.02), col.panel, trs(-1.95, 0.62, sg * 1.16, sg * -0.2));
+  // chrome rails: cockpit side rails on three posts, short stern grab rails, bow rail
   for (const sg of [-1, 1]) {
-    bx(-1.75, 0.56, sg * 1.125, 0.62, 0.2, 0.035, col.panel, sg * -0.23);
-    bx(0.55, 0.6, sg * 1.165, 0.5, 0.16, 0.035, col.panel, sg * -0.22);
-    const zr = sg * 0.98;
-    mb.add(cyl, col.panel, between([-2.35, 0.8, zr], [-2.3, 1.06, zr], 0.035));
-    mb.add(cyl, col.panel, between([-1.4, 0.82, zr + sg * 0.05], [-1.45, 1.08, zr + sg * 0.05], 0.035));
-    mb.add(cyl, col.panel, between([-2.32, 1.06, zr], [-1.43, 1.08, zr + sg * 0.05], 0.04));
-    mb.add(cyl, col.trim, between([-1.5, 1.08, zr + sg * 0.05], [-1.36, 1.08, zr + sg * 0.05], 0.055));
+    const z = sg * 0.97;
+    tube([[-1.25, 0.88, z], [-1.25, 1.1, z], [0.55, 1.12, z], [0.62, 0.9, z]], 0.032);
+    tube([[-0.35, 0.88, z], [-0.35, 1.11, z]], 0.026);
+    tube([[-2.45, 0.92, sg * 0.86], [-2.42, 1.08, sg * 0.86], [-1.62, 1.09, sg * 0.86], [-1.58, 0.92, sg * 0.86]], 0.03);
+    tube([[1.7, 0.98, sg * 0.86], [1.75, 1.12, sg * 0.82], [2.55, 1.13, sg * 0.36], [2.75, 1.08, 0]], 0.026);
   }
   // bow cleat
-  bx(2.75, 1.0, 0, 0.22, 0.06, 0.1, col.panel);
+  mb.add(rbox(0.22, 0.06, 0.1, 0.02), col.panel, trs(2.62, 1.09, 0));
 
   // --- crew: port = hairA (spiky), starboard = hairB (swept) ---
   const crew = new MeshBuilder();
@@ -148,9 +183,10 @@ function buildBoatGeometry(col: BoatColors) {
     const mb = new MeshBuilder();
     bx(-0.3, 0.57, z, 0.56, 0.2, 0.4, 0x1c2f55); // legs
     bx(0.02, 0.5, z, 0.2, 0.34, 0.38, 0x1c2f55);
-    mb.add(box, col.shirt, trs(-0.5, 0.95, z, 0, 0, lean, 0.3, 0.6, 0.46));
-    mb.add(box, col.vest, trs(-0.5, 0.95, z, 0, 0, lean, 0.38, 0.5, 0.52));
-    for (const y of [0.84, 1.02]) mb.add(box, 0x2a2c33, trs(-0.5 + (y - 0.95) * 0.2, y, z, 0, 0, lean, 0.395, 0.045, 0.535));
+    mb.add(rbox(0.3, 0.6, 0.46, 0.1), col.shirt, trs(-0.5, 0.95, z, 0, 0, lean));
+    mb.add(rbox(0.38, 0.5, 0.52, 0.12), col.vest, trs(-0.5, 0.95, z, 0, 0, lean));
+    mb.add(rbox(0.3, 0.12, 0.5, 0.05), col.vest, trs(-0.47, 1.2, z, 0, 0, lean));
+    for (const y of [0.84, 1.02]) mb.add(rbox(0.4, 0.045, 0.54, 0.02), 0x2a2c33, trs(-0.5 + (y - 0.95) * 0.2, y, z, 0, 0, lean));
     mb.add(box, 0x2a2c33, trs(-0.69, 0.96, z, 0, 0, lean, 0.02, 0.4, 0.07));
     const sh = [-0.4, 1.19, z];
     for (const a of [-1, 1]) {
@@ -191,7 +227,7 @@ function buildBoatGeometry(col: BoatColors) {
     const k = 1.2;
     crew.append(mb, new THREE.Matrix4().makeTranslation(0, 0, z).multiply(new THREE.Matrix4().makeScale(k, k, k)).multiply(new THREE.Matrix4().makeTranslation(0.42, -0.46, -z)));
   }
-  return { hull: mb.build(), crew: crew.build() };
+  return { hull: mb.build(), crew: crew.build(), chrome: chrome.build() };
 }
 
 function badgeTexture(bg: string) {
@@ -231,6 +267,8 @@ export class BoatView {
     const geo = buildBoatGeometry(col);
     this.mesh = new THREE.Mesh(geo.hull, mat);
     this.crew = new THREE.Mesh(geo.crew, mat);
+    const rails = new THREE.Mesh(geo.chrome, new THREE.MeshStandardMaterial({ color: 0xdfe4ec, metalness: 0.85, roughness: 0.22, envMapIntensity: 1.4 }));
+    rails.castShadow = true;
     this.crew.castShadow = true;
     this.crew.position.set(-0.42, 0.46, 0); // seat pivot
     this.crew.rotation.order = 'ZXY';
@@ -238,7 +276,7 @@ export class BoatView {
     this.mesh.receiveShadow = true;
     // stubbier, taller silhouette than the authored stations: closer to the reference hull
     this.body.scale.set(0.9, 1.12, 1.08);
-    this.body.add(this.mesh, this.crew);
+    this.body.add(this.mesh, this.crew, rails);
     const badge = new THREE.Mesh(
       new THREE.PlaneGeometry(0.52, 0.29),
       new THREE.MeshStandardMaterial({ map: badgeTexture(col.badgeBg), roughness: 0.5 }),
