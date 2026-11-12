@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math';
-import { canvasTexture } from './tex';
+import { canvasTexture, paintedTexture } from './tex';
 
 export const PAL = {
   skyZenith: 0x3f7fd0, skyMid: 0x62a8e2, skyLow: 0x8fcbee, skyHaze: 0xd9ecf4,
@@ -34,6 +34,7 @@ void main() {
 
 const skyFrag = /* glsl */ `
 uniform vec3 uZenith; uniform vec3 uMid; uniform vec3 uLow; uniform vec3 uHaze; uniform vec3 uGround; uniform vec3 uSun;
+uniform sampler2D tSky;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -41,6 +42,10 @@ void main() {
   vec3 c = mix(uHaze, uLow, smoothstep(0.0, 0.10, h));
   c = mix(c, uMid, smoothstep(0.06, 0.32, h));
   c = mix(c, uZenith, smoothstep(0.28, 0.85, h));
+  // painted cloud band wrapped four times round the horizon, fading into the gradient
+  vec2 suv = vec2((atan(d.z, d.x) / 6.2831853 + 0.5) * 4.0, clamp(h / 0.72, 0.0, 1.0));
+  vec3 sk = texture2D(tSky, suv).rgb;
+  c = mix(c, sk, smoothstep(-0.01, 0.06, h) * (1.0 - smoothstep(0.55, 0.85, h)));
   c = mix(c, uGround, smoothstep(0.0, -0.12, h));
   float s = max(dot(d, uSun), 0.0);
   c += vec3(1.0, 0.92, 0.75) * (pow(s, 600.0) * 3.0 + pow(s, 24.0) * 0.10);
@@ -101,6 +106,7 @@ export function createEnv(scene: THREE.Scene, renderer: THREE.WebGLRenderer, sha
       uHaze: { value: new THREE.Color(PAL.skyHaze) },
       uGround: { value: new THREE.Color(0x7a5a52) },
       uSun: { value: SUN_DIR },
+      tSky: { value: paintedTexture('sky', false) },
     },
     side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
   });
@@ -150,6 +156,7 @@ export function createEnv(scene: THREE.Scene, renderer: THREE.WebGLRenderer, sha
     sp.renderOrder = -9;
     clouds.add(sp);
   }
+  clouds.visible = false; // the painted sky carries the clouds now
   scene.add(clouds);
 
   const tmp = new THREE.Vector3();

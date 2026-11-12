@@ -98,6 +98,17 @@ export function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingCon
   return tex;
 }
 
+const loader = new THREE.TextureLoader();
+/** Hand-painted tileable texture from public/tex (generated in the reference's style). */
+export function paintedTexture(name: string, mips = true) {
+  const t = loader.load(`${import.meta.env.BASE_URL}tex/${name}.jpg`);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  if (!mips) { t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; }
+  return t;
+}
+
 /** Vertex-coloured mesh builder for the authored hard-surface models. */
 export class MeshBuilder {
   pos: number[] = [];

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { blockNoise, fbm, hash, lerp } from '../core/math';
 import { Course, DS } from '../game/course';
 import { PAL } from './env';
+import { paintedTexture } from './tex';
 
 export interface Anchor { x: number; y: number; z: number; s: number; side: number; kind: 'shore' | 'ledge' | 'lip' | 'top'; nx: number; nz: number; drop: number; fx: number; fz: number; tier: number }
 
@@ -67,6 +68,9 @@ export function createTerrain(c: Course, noiseTex: THREE.Texture): Terrain {
   const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, vertexColors: true });
   material.onBeforeCompile = (sh) => {
     sh.uniforms.tNoise = { value: noiseTex };
+    sh.uniforms.tCliff = { value: paintedTexture('cliff') };
+    sh.uniforms.tLedge = { value: paintedTexture('ledge') };
+    sh.uniforms.tGrass = { value: paintedTexture('grass') };
     sh.uniforms.cRock = { value: new THREE.Color(PAL.rock) };
     sh.uniforms.cRockDark = { value: new THREE.Color(PAL.rockDark) };
     sh.uniforms.cRockLit = { value: new THREE.Color(PAL.rockLit) };
@@ -78,7 +82,7 @@ export function createTerrain(c: Course, noiseTex: THREE.Texture): Terrain {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vWPos;
-        uniform sampler2D tNoise; uniform vec3 cRock; uniform vec3 cRockDark; uniform vec3 cRockLit; uniform vec3 cGrass; uniform vec3 cGrassDark;`)
+        uniform sampler2D tNoise; uniform sampler2D tCliff; uniform sampler2D tLedge; uniform sampler2D tGrass; uniform vec3 cRock; uniform vec3 cRockDark; uniform vec3 cRockLit; uniform vec3 cGrass; uniform vec3 cGrassDark;`)
       .replace('#include <color_fragment>', `
         vec3 wn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
         vec4 wn4 = texture2D(tNoise, vWPos.xz * 0.011);
@@ -86,37 +90,24 @@ export function createTerrain(c: Course, noiseTex: THREE.Texture): Terrain {
         float yy = vWPos.y + warp * 3.0;
         float band = texture2D(tNoise, vec2(yy * 0.031, 0.21 + warp * 0.05)).g;
         float fine = texture2D(tNoise, vec2(yy * 0.17, vWPos.x * 0.004 + vWPos.z * 0.004)).b;
-        vec3 rock = mix(cRockDark, cRock, smoothstep(0.30, 0.62, band));
-        rock = mix(rock, cRockLit, smoothstep(0.60, 0.85, band) * 0.55);
-        rock *= 0.90 + 0.22 * fine;
-        float bed = yy * 0.16 + band * 1.7;
-        float crack = smoothstep(0.06, 0.01, abs(fract(bed) - 0.5));
-        float layer = floor(bed + 0.5);
-        float lr = fract(sin(layer * 12.9898) * 43758.5453);
-        // vertical joints, offset per bed, measured along each flat facet
-        vec2 al = normalize(vec2(-wn.z, wn.x) + 1e-4);
-        float run = dot(vWPos.xz, al) * (0.055 + 0.03 * lr) + lr * 7.0;
-        float steep = 1.0 - smoothstep(0.35, 0.7, wn.y);
-        float joint = smoothstep(0.05, 0.01, abs(fract(run) - 0.5)) * steep;
-        float blk = fract(sin((floor(run + 0.5) + layer * 17.0) * 78.233) * 43758.5453);
-        rock *= 0.80 + 0.36 * blk * steep + 0.2 * (1.0 - steep);
-        // each bed: sun-caught upper lip, shadowed undercut above the parting below, own tint
-        float fb = fract(bed + 0.5);
-        rock *= 1.0 + steep * (0.2 * smoothstep(0.72, 0.94, fb) - 0.42 * (1.0 - smoothstep(0.0, 0.2, fb)));
-        rock *= mix(vec3(1.14, 1.02, 0.88), vec3(0.74, 0.62, 0.64), lr * lr);
-        float sub = texture2D(tNoise, vec2(yy * 0.9, 0.63 + lr * 0.2)).r;
-        rock *= 1.0 - steep * 0.12 * smoothstep(0.55, 0.75, sub);
-        rock = mix(rock, cRockLit * vec3(1.12, 1.05, 0.95), step(0.82, lr) * steep * 0.45);
-        rock *= 1.0 - 0.6 * max(crack, joint);
-        float up = smoothstep(0.45, 0.85, wn.y);
-        rock = mix(rock, cRockLit * 1.02, up * 0.75);
+        // hand-painted strata: triplanar, with the beds locked to world height
+        vec3 bw = pow(abs(wn), vec3(4.0));
+        float vy = yy * 0.075;
+        vec3 cx = texture2D(tCliff, vec2(vWPos.z * 0.075, vy)).rgb;
+        vec3 cz = texture2D(tCliff, vec2(vWPos.x * 0.075, vy)).rgb;
+        vec3 rock = (cx * bw.x + cz * bw.z) / max(bw.x + bw.z, 1e-4) * 0.74;
+        vec3 top = texture2D(tLedge, vWPos.xz * 0.09).rgb * 0.52;
+        rock = mix(rock, top, smoothstep(0.5, 0.85, wn.y));
+        rock *= mix(0.84, 1.08, smoothstep(0.25, 0.75, band)) * (0.94 + 0.12 * fine);
         float g = vColor.r * smoothstep(0.35, 0.8, wn.y + (fine - 0.5) * 0.5);
-        vec3 grass = mix(cGrassDark, cGrass, wn4.a * 0.6 + fine * 0.4);
+        vec3 grass = texture2D(tGrass, vWPos.xz * 0.12).rgb * mix(0.85, 1.1, wn4.a);
         rock = mix(rock, grass, g);
         rock *= mix(1.0, 0.55, vColor.g);
         rock *= 0.92 + 0.16 * vColor.b;
         diffuseColor.rgb *= rock;
-      `);
+      `)
+      // painted shade stays saturated red instead of sinking into mud
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.15, 0.17);');
   };
 
   const rowsTotal = Math.floor((c.n - 1) / ROW) + 1;

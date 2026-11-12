@@ -3,7 +3,7 @@ import { fbm, hash, lerp, mulberry32 } from '../core/math';
 import { Course, groundY, posAt, sampleTrack, waterY } from '../game/course';
 import { PAL } from './env';
 import { Anchor } from './terrain';
-import { between, canvasTexture, MeshBuilder, trs } from './tex';
+import { between, canvasTexture, MeshBuilder, trs, paintedTexture } from './tex';
 
 const SECTION = 240;
 
@@ -126,7 +126,13 @@ function boulderGeo(seed: number) {
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.computeVertexNormals();
+  // spherical normals: river-worn, rounded stones rather than faceted crystals
+  const nrm = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    v.set(p.getX(i), p.getY(i) / 0.72, p.getZ(i)).normalize();
+    nrm[i * 3] = v.x; nrm[i * 3 + 1] = v.y; nrm[i * 3 + 2] = v.z;
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
   return g;
 }
 
@@ -200,7 +206,26 @@ export function createDecor(c: Course, anchors: Anchor[], noiseTex: THREE.Textur
   const sc = new Scatter();
   const leafMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const solidMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const tBoulder = paintedTexture('boulder');
+  rockMat.onBeforeCompile = (sh) => {
+    sh.uniforms.tBoulder = { value: tBoulder };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec4 bwp = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+        bwp = instanceMatrix * bwp;
+        #endif
+        vWPos = (modelMatrix * bwp).xyz;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D tBoulder;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 bn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
+        vec3 w3 = pow(abs(bn), vec3(4.0)); w3 /= dot(w3, vec3(1.0));
+        vec3 bt = texture2D(tBoulder, vWPos.zy * 0.3).rgb * w3.x + texture2D(tBoulder, vWPos.xz * 0.3).rgb * w3.y + texture2D(tBoulder, vWPos.xy * 0.3).rgb * w3.z;
+        diffuseColor.rgb *= mix(vec3(1.0), vec3(dot(bt, vec3(0.3, 0.59, 0.11)) * 5.0), 0.75);`);
+  };
   sc.define('broad0', { geo: plantGeo(true, 1), mat: leafMat, cast: false, range: 380 });
   sc.define('broad1', { geo: plantGeo(true, 2), mat: leafMat, cast: false, range: 380 });
   sc.define('fern0', { geo: plantGeo(false, 3), mat: leafMat, cast: false, range: 320 });
