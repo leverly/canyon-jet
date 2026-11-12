@@ -256,17 +256,22 @@ export function createDecor(c: Course, anchors: Anchor[], noiseTex: THREE.Textur
           sc.add((broad ? 'broad' : 'fern') + (rnd() < 0.5 ? 0 : 1), a.s, trs(a.x + tx * j + a.nx * o, a.y - 0.1 + o * 0.12, a.z + tz * j + a.nz * o, 0, rnd() * 6.28, 0, s), tint());
         }
       }
-      if (rnd() < 0.07) {
+      if (rnd() < 0.16) {
         // big fronds leaning over the water: foreground framing as the boat passes
         const s = 3.0 + rnd() * 2.2;
         sc.add('broad' + (rnd() < 0.5 ? 0 : 1), a.s, trs(a.x - a.nx * 1.2, a.y - 0.2, a.z - a.nz * 1.2, 0, rnd() * 6.28, 0, s), tint(0.95, 1.15));
       }
-      if (rnd() < 0.26) {
-        const s = 0.9 + rnd() * 1.1;
-        const j = jit(3), o = rnd() * 2.2;
-        sc.add('flower', a.s, trs(a.x + tx * j + a.nx * o, a.y + 0.05, a.z + tz * j + a.nz * o, 0, rnd() * 6.28, 0, s), tint(0.95, 1.1));
+      if (rnd() < 0.42) {
+        // pink flower clumps in drifts along the bank
+        const k = 1 + Math.floor(rnd() * 3);
+        const j0 = jit(3), o0 = rnd() * 2.2;
+        for (let f = 0; f < k; f++) {
+          const s = 0.9 + rnd() * 1.2;
+          const j = j0 + jit(1.6), o = o0 + rnd() * 1.2;
+          sc.add('flower', a.s, trs(a.x + tx * j + a.nx * o, a.y + 0.05, a.z + tz * j + a.nz * o, 0, rnd() * 6.28, 0, s), tint(0.95, 1.1));
+        }
       }
-      if (rnd() < 0.34) {
+      if (rnd() < 0.46) {
         const s = 0.8 + rnd() * rnd() * 2.6;
         const j = jit(3), o = s * 0.9 - 0.3 + rnd() * 2.5;
         sc.add('boulder' + Math.floor(rnd() * 3), a.s, trs(a.x + tx * j + a.nx * o, a.y - 0.25 * s, a.z + tz * j + a.nz * o, jit(0.5), rnd() * 6.28, jit(0.5), s, s * (0.6 + rnd() * 0.3), s * (0.8 + rnd() * 0.4)), tint(0.9, 1.1));

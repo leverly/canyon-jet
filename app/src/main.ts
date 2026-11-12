@@ -7,6 +7,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { Sfx } from './core/audio';
 import { Controls } from './core/input';
 import { clamp, damp, lerp, mulberry32, wrapAngle } from './core/math';
@@ -42,9 +43,9 @@ function softwareGL() {
 const gpu = softwareGL();
 
 const QUALITY = [
-  { dpr: 1, shadow: 0, post: false, spray: 0.4, decor: 0.6 },
-  { dpr: 1.5, shadow: 1024, post: true, spray: 0.75, decor: 0.85 },
-  { dpr: 2, shadow: 2048, post: true, spray: 1, decor: 1 },
+  { dpr: 1, shadow: 0, post: false, spray: 0.4, decor: 0.6, paint: false },
+  { dpr: 1.5, shadow: 1024, post: true, spray: 0.75, decor: 0.85, paint: false },
+  { dpr: 2, shadow: 2048, post: true, spray: 1, decor: 1, paint: true },
 ];
 function loadNum(key: string, lo: number, hi: number): number | null {
   try {
@@ -91,6 +92,34 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, 
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.16, 0.6, 0.95);
 composer.addPass(bloom);
+// Kuwahara filter: flattens the frame into brush-stroke patches like the painted reference
+const paintPass = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uStep: { value: new THREE.Vector2() } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uStep; varying vec2 vUv;
+    void main(){
+      vec3 m0 = vec3(0.0), m1 = vec3(0.0), m2 = vec3(0.0), m3 = vec3(0.0);
+      vec3 s0 = vec3(0.0), s1 = vec3(0.0), s2 = vec3(0.0), s3 = vec3(0.0);
+      for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
+        vec3 c = min(texture2D(tDiffuse, vUv + vec2(float(i), float(j)) * uStep).rgb, vec3(4.0));
+        vec3 c2 = c * c;
+        if (i <= 0 && j <= 0) { m0 += c; s0 += c2; }
+        if (i >= 0 && j <= 0) { m1 += c; s1 += c2; }
+        if (i <= 0 && j >= 0) { m2 += c; s2 += c2; }
+        if (i >= 0 && j >= 0) { m3 += c; s3 += c2; }
+      }
+      m0 /= 9.0; m1 /= 9.0; m2 /= 9.0; m3 /= 9.0;
+      vec4 v = vec4(dot(s0 / 9.0 - m0 * m0, vec3(1.0)), dot(s1 / 9.0 - m1 * m1, vec3(1.0)),
+                    dot(s2 / 9.0 - m2 * m2, vec3(1.0)), dot(s3 / 9.0 - m3 * m3, vec3(1.0)));
+      vec3 o = m0; float best = v.x;
+      if (v.y < best) { best = v.y; o = m1; }
+      if (v.z < best) { best = v.z; o = m2; }
+      if (v.w < best) { o = m3; }
+      vec4 src = texture2D(tDiffuse, vUv);
+      gl_FragColor = vec4(mix(src.rgb, o, 0.85), src.a);
+    }`,
+});
+composer.addPass(paintPass);
 composer.addPass(new OutputPass());
 
 function applyQuality(q: number) {
@@ -112,6 +141,8 @@ function resize() {
   renderer.setSize(w, h, false);
   composer.setPixelRatio(dpr);
   composer.setSize(w, h);
+  paintPass.enabled = QUALITY[quality].paint && params.get('paint') !== '0';
+  paintPass.uniforms.uStep.value.set(dpr / (w * dpr), dpr / (h * dpr)).multiplyScalar(1.25);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -331,8 +362,8 @@ function updateCamera(p: BoatPose, dt: number) {
       camPos.set(p.x - bx * 0.9, p.y + 2.0, p.z - bz * 0.9);
       camLook.set(p.x + bx * 12, p.y + 1.2, p.z + bz * 12);
     } else {
-      const dist = 7.5 + sp * 0.9 + (p.boosting ? 0.8 : 0);
-      camPos.set(p.x - fx * dist - fz * 1.0, cam.y + 2.35, p.z - fz * dist + fx * 1.0);
+      const dist = 6.4 + sp * 0.8 + (p.boosting ? 0.8 : 0);
+      camPos.set(p.x - fx * dist - fz * 1.3, cam.y + 1.85, p.z - fz * dist + fx * 1.3);
       // keep the camera over water in tight gorges
       const loc = locate(course, camPos.x, camPos.z, race.player.idx, 14);
       const lim = sampleTrack(course, loc.s).hw - 1.6;
@@ -342,7 +373,7 @@ function updateCamera(p: BoatPose, dt: number) {
         camPos.z -= course.tx[loc.i] * over;
       }
       camPos.y = Math.max(camPos.y, waterY(course, loc.s) + 1.2);
-      camLook.set(p.x + bx * 4.2, lerp(cam.y, p.y, 0.6) + 1.3, p.z + bz * 4.2);
+      camLook.set(p.x + bx * 4.2, lerp(cam.y, p.y, 0.6) + 1.15, p.z + bz * 4.2);
     }
     camera.fov = cam.fov;
   }
