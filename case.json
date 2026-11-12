@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "title": "Canyon Jet: Red River Rush",
+  "engine": "threejs",
+  "brief": "参考这个图片画面，开发一个赛艇3A游戏大作 (jet-boat racing game matching this reference frame)",
+  "references": [
+    {
+      "id": "ref-001",
+      "kind": "image",
+      "priority": 1,
+      "role": "gameplay frame (single still)",
+      "authority": [
+        "style",
+        "identity",
+        "ui"
+      ],
+      "notes": "Only reference. Governs appearance, boat/crew identity, camera framing and HUD family. Mechanics, motion, level layout and audio are unobserved and authored. Same picture as the bundled Jungle Jetboat Jump example reference of the skill repo; that example code/assets are NOT reused.",
+      "source": "image.png",
+      "path": "references/ref-001-image.png",
+      "sha256": "f47c2c55ababd9f2d5f91a126f38fdf64f838eca858b023db7b72ddd38fd8775",
+      "inspection": "viewed full frame + focal crops (boat, left HUD, speed card, right cliff); palette sampled"
+    }
+  ],
+  "generation": {
+    "enabled": false,
+    "budget_usd": 0
+  },
+  "notes": [
+    "No fal credentials; generation disabled. All assets procedural (geometry, shaders, canvas textures, WebAudio).",
+    "\"3A\" in the brief is treated as a quality ambition: polished look + complete race loop within a browser Three.js scope."
+  ]
+}

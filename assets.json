@@ -1,0 +1,125 @@
+{
+  "items": [
+    {
+      "id": "hero-boat",
+      "description": "Orange jet boat with two crew",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "procedural mesh (authored hull stations + primitives, vertex colours)",
+      "status": "accepted",
+      "runtime_path": "app/src/world/boat.ts",
+      "provenance": "Written for this project; no generated or third-party art. Identity from ref-001: orange hull, blue trim, grey stern housing, JET badge, grab rails; port crew brown spiky hair, starboard blond; yellow vests. Simplified, toy-like proportions; no sculpted faces."
+    },
+    {
+      "id": "rival-boats",
+      "description": "Three rival boats",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "same builder, recoloured (white/red, blue/white, purple/yellow)",
+      "status": "accepted",
+      "runtime_path": "app/src/world/boat.ts",
+      "provenance": "Written for this project; no generated or third-party art. Authored. Never orange so the hero stays the warm focal accent."
+    },
+    {
+      "id": "canyon",
+      "description": "Stratified sandstone canyon walls, plateau, headwall, far mesas",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "procedural terrace mesh + strata/joint shader",
+      "status": "accepted",
+      "runtime_path": "app/src/world/terrain.ts",
+      "provenance": "Written for this project; no generated or third-party art. Palette and blocky terraces from ref-001; layout authored."
+    },
+    {
+      "id": "water",
+      "description": "Turquoise river, shore foam, rapids, falls, hull churn",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "ribbon mesh + shader on a generated tileable height/gradient texture",
+      "status": "accepted",
+      "runtime_path": "app/src/world/water.ts",
+      "provenance": "Written for this project; no generated or third-party art. Colour roles from ref-001."
+    },
+    {
+      "id": "spray",
+      "description": "Hull spray sheets, droplets, wake ribbon, waterfall mist",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "authored sheet geometry + noise-torn shader; CPU particles; trail mesh",
+      "status": "accepted",
+      "runtime_path": "app/src/world/fx.ts",
+      "provenance": "Written for this project; no generated or third-party art. Shape authored; reference spray is larger and more curled."
+    },
+    {
+      "id": "foliage",
+      "description": "Broad-leaf plants, ferns, pink flower bushes, flat-crowned trees, vines, boulders",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "procedural instanced geometry",
+      "status": "accepted",
+      "runtime_path": "app/src/world/props.ts",
+      "provenance": "Written for this project; no generated or third-party art. Vocabulary from ref-001 banks."
+    },
+    {
+      "id": "course-objects",
+      "description": "Gates, sun pickups, boost pads, ramps, finish arch, rock foam collars",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "procedural geometry, canvas textures, shader",
+      "status": "accepted",
+      "runtime_path": "app/src/world/props.ts",
+      "provenance": "Written for this project; no generated or third-party art. Authored; sun pickup echoes the HUD emblem."
+    },
+    {
+      "id": "sky",
+      "description": "Gradient sky, sun glow, cumulus sprites",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "shader dome + canvas-painted sprites",
+      "status": "accepted",
+      "runtime_path": "app/src/world/env.ts",
+      "provenance": "Written for this project; no generated or third-party art. Sky blues sampled from ref-001; clouds authored in the same warm-cream/lilac scheme."
+    },
+    {
+      "id": "hud",
+      "description": "Emblem + timer, SCORE panel, SPEED card, boost/position/progress",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "DOM + inline SVG + CSS",
+      "status": "accepted",
+      "runtime_path": "app/index.html",
+      "provenance": "Written for this project; no generated or third-party art. Emblem, timer, SCORE and SPEED follow ref-001; boost bar, position chip, combo and progress bar are authored additions."
+    },
+    {
+      "id": "font",
+      "description": "Nunito 700/800/900",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "@fontsource/nunito (SIL OFL 1.1), bundled",
+      "status": "accepted",
+      "runtime_path": "app/node_modules/@fontsource/nunito",
+      "provenance": "Written for this project; no generated or third-party art. Closest open rounded geometric sans to the reference lettering. CJK menu text uses the system font."
+    },
+    {
+      "id": "audio",
+      "description": "Engine, water rush, one-shots, music loop",
+      "references": [
+        "ref-001"
+      ],
+      "representation": "WebAudio synthesis at runtime (no files)",
+      "status": "accepted",
+      "runtime_path": "app/src/core/audio.ts",
+      "provenance": "Written for this project; no generated or third-party art. Authored; reference has no audio."
+    }
+  ]
+}

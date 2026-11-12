@@ -1,0 +1,206 @@
+{
+  "status": "locked",
+  "anchors": [
+    {
+      "reference_id": "ref-001",
+      "notes": "Single still. Authority for palette relationships, boat/crew identity, chase framing, HUD family. Everything not visible (boat front, course layout, motion) is authored."
+    }
+  ],
+  "palette": [
+    {
+      "role": "sky zenith",
+      "hex": "#4e87cc",
+      "reference_id": "ref-001",
+      "notes": "sampled; saturated mid blue, ~18% of frame"
+    },
+    {
+      "role": "sky low",
+      "hex": "#7dbfe7",
+      "reference_id": "ref-001",
+      "notes": "sampled; lighter toward horizon"
+    },
+    {
+      "role": "cloud lit",
+      "hex": "#f7eed8",
+      "reference_id": "ref-001",
+      "notes": "sampled; warm cream cumulus, soft grey-lilac undersides"
+    },
+    {
+      "role": "sandstone sunlit",
+      "hex": "#e07a48",
+      "reference_id": "ref-001",
+      "notes": "estimated from lit ledges; orange top planes"
+    },
+    {
+      "role": "sandstone body",
+      "hex": "#b3432b",
+      "reference_id": "ref-001",
+      "notes": "estimated; dominant red, ~35% of frame"
+    },
+    {
+      "role": "sandstone shadow",
+      "hex": "#56211b",
+      "reference_id": "ref-001",
+      "notes": "sampled right cliff; darkest warm framing value"
+    },
+    {
+      "role": "distant mesa haze",
+      "hex": "#de7f5e",
+      "reference_id": "ref-001",
+      "notes": "sampled; lifts toward pink #cba7b0 with distance"
+    },
+    {
+      "role": "water far",
+      "hex": "#7dbbcb",
+      "reference_id": "ref-001",
+      "notes": "sampled; pale cyan reflecting sky"
+    },
+    {
+      "role": "water turquoise",
+      "hex": "#3fb8ad",
+      "reference_id": "ref-001",
+      "notes": "estimated mid band; the complementary accent against red rock"
+    },
+    {
+      "role": "water deep",
+      "hex": "#2a5357",
+      "reference_id": "ref-001",
+      "notes": "sampled foreground troughs"
+    },
+    {
+      "role": "foam",
+      "hex": "#f4fbfa",
+      "reference_id": "ref-001",
+      "notes": "estimated; large white spray masses around hull"
+    },
+    {
+      "role": "hero orange",
+      "hex": "#f07a22",
+      "reference_id": "ref-001",
+      "notes": "estimated lit deck; shade #a74020 sampled. Most saturated warm object, centered"
+    },
+    {
+      "role": "hero blue trim",
+      "hex": "#2a62b8",
+      "reference_id": "ref-001",
+      "notes": "estimated; thin stripes on gunwale and chine"
+    },
+    {
+      "role": "hero grey panels",
+      "hex": "#c9c8cc",
+      "reference_id": "ref-001",
+      "notes": "estimated; stern housing, side plates, grab rails"
+    },
+    {
+      "role": "vest yellow",
+      "hex": "#f2b62a",
+      "reference_id": "ref-001",
+      "notes": "estimated lit; sampled shade #c1852d"
+    },
+    {
+      "role": "crew blue",
+      "hex": "#214270",
+      "reference_id": "ref-001",
+      "notes": "sampled shirt"
+    },
+    {
+      "role": "foliage lit",
+      "hex": "#9fbf3a",
+      "reference_id": "ref-001",
+      "notes": "estimated yellow-green fronds"
+    },
+    {
+      "role": "foliage mid",
+      "hex": "#3f7a2c",
+      "reference_id": "ref-001",
+      "notes": "estimated"
+    },
+    {
+      "role": "foliage dark frame",
+      "hex": "#263218",
+      "reference_id": "ref-001",
+      "notes": "sampled; dark leaves framing bottom-left"
+    },
+    {
+      "role": "flower pink",
+      "hex": "#ec5e9c",
+      "reference_id": "ref-001",
+      "notes": "estimated; small saturated clusters only"
+    },
+    {
+      "role": "boulder",
+      "hex": "#8b7564",
+      "reference_id": "ref-001",
+      "notes": "sampled lit; cool dark side #302f38"
+    },
+    {
+      "role": "hud navy",
+      "hex": "#1a2029",
+      "reference_id": "ref-001",
+      "notes": "sampled; panels ~80% opaque"
+    },
+    {
+      "role": "hud teal fill",
+      "hex": "#17363d",
+      "reference_id": "ref-001",
+      "notes": "sampled speed card fill"
+    },
+    {
+      "role": "hud cyan",
+      "hex": "#58e6ee",
+      "reference_id": "ref-001",
+      "notes": "estimated glowing outline + SPEED label"
+    },
+    {
+      "role": "hud lavender",
+      "hex": "#c6bcea",
+      "reference_id": "ref-001",
+      "notes": "sampled timer digits"
+    },
+    {
+      "role": "hud cream",
+      "hex": "#f6ecd0",
+      "reference_id": "ref-001",
+      "notes": "estimated score text"
+    },
+    {
+      "role": "hud sun",
+      "hex": "#f8e064",
+      "reference_id": "ref-001",
+      "notes": "sampled emblem sun"
+    }
+  ],
+  "identity": [
+    "One orange jet boat: angular chamfered hull, blue trim stripes, grey-white stern jet housing with dark nozzle, JET badge on port stern, grey grab rails, dark cockpit, black lower hull",
+    "Exactly two crew seen from behind: port = dark brown spiky hair, starboard = blond swept hair; both yellow life vests with dark straps over blue shirts, dark gloves on handlebars",
+    "Red blocky stratified sandstone canyon with green plateau tops, flat-crowned trees, hanging vines",
+    "Turquoise river with white foam; grey boulders, ferns, broad leaves and pink flowers on the banks"
+  ],
+  "materials": [
+    "Stylized smooth shading with crisp chamfered planes, soft painterly gradients, no photoreal grit",
+    "Rock: large flat facets, horizontal strata, lit orange tops vs red shadow sides",
+    "Water: glossy turquoise with sky fresnel, soft caustic-like light ripples, thick white foam",
+    "Boat: semi-gloss paint with clear highlights"
+  ],
+  "lighting": "High warm sun from upper-left/behind-left; cool blue sky fill; warm bounce on rock; soft contact shadows; light aerial haze shifting far mesas to pink",
+  "camera": "Perspective chase camera behind and slightly above/left of the boat, ~55 deg vertical FOV; boat ~27% of frame width, centered slightly left and below middle; horizon at ~47% from top; boat banks in turns",
+  "ui": "Top-left circular teal emblem (sun over three wave lines) with timer plate beneath in lavender digits; left-edge SCORE panel in navy with slanted blue accent bar and cream bold digits; top-right skewed SPEED card with glowing cyan outline, white glowing number and KM/H chip. Rounded bold geometric sans.",
+  "motion": "Authored (unobserved): weighty planing hull, bank into turns, bow lift under throttle, big rooster-tail and side spray, bobbing on waves, punchy landings",
+  "nonnegotiables": [
+    "Orange boat + two yellow-vested crew is the focal accent",
+    "Turquoise water against red sandstone complementary contrast",
+    "Rear three-quarter chase framing with foliage/rock framing the edges",
+    "HUD family: emblem+timer, SCORE panel, cyan SPEED card in the same positions",
+    "White spray around the hull while moving"
+  ],
+  "avoid": [
+    "Photoreal grit or desaturated realism",
+    "Generic grey/brown rock",
+    "Neon sci-fi UI beyond the cyan speed card",
+    "Replacing the crew with primitives lacking hair/vest identity"
+  ],
+  "deliberate_changes": [
+    "Race position chip and boost meter added in the same HUD family (authored, not in reference)",
+    "All geometry procedural rather than sculpted/generated: simpler silhouettes, less painterly micro-detail than the still"
+  ]
+}

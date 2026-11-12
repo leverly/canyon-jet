@@ -1,0 +1,115 @@
+{
+  "status": "ready",
+  "premise": "Arcade jet-boat race down a red sandstone canyon river: beat three rival boats to the lagoon while threading gates, collecting suns, hitting boost pads and ramps, and surviving the waterfall leap.",
+  "actions": [
+    "Throttle (W/Up, RT, touch)",
+    "Brake/reverse (S/Down)",
+    "Steer (A/D, Left/Right, stick)",
+    "Boost (Space/Shift, A button) spends boost meter",
+    "Reset to course (R)",
+    "Pause (Esc/P)",
+    "Mute (M)",
+    "Toggle chase/cockpit camera (C)"
+  ],
+  "loop": {
+    "goal": "Finish the point-to-point canyon course in the best position and time with the highest score",
+    "success": "Cross the finish gate; result shows position, time, score and medal",
+    "failure_or_pressure": "Three AI rivals; rocks and walls cost speed and combo; missed gates add a time penalty; DNF if the clock exceeds the limit",
+    "restart": "Restart from results or pause menu fully resets race state, entities, effects, audio and input"
+  },
+  "mechanics": [
+    {
+      "id": "drive",
+      "source": "authored",
+      "input": "throttle/steer",
+      "precondition": "race running",
+      "mutation": "fixed-step hull velocity/heading integration with lateral grip, river current",
+      "feedback": "bank, bow lift, spray, engine pitch, speed card",
+      "rejection": "ignored during countdown/pause/finish"
+    },
+    {
+      "id": "gates",
+      "source": "authored",
+      "input": "pass between gate buoys",
+      "precondition": "gate is the next ordered gate",
+      "mutation": "next gate index +1, score +250*combo, combo +1",
+      "feedback": "chime, gate flash, popup",
+      "rejection": "passing outside marks the gate missed once: +3 s penalty, combo reset"
+    },
+    {
+      "id": "suns",
+      "source": "authored (emblem motif from HUD)",
+      "input": "touch sun pickup",
+      "precondition": "pickup id not yet collected",
+      "mutation": "score +100*combo, boost meter +8%",
+      "feedback": "chime, sparkle",
+      "rejection": "each id once per race"
+    },
+    {
+      "id": "boost",
+      "source": "authored",
+      "input": "boost button",
+      "precondition": "meter > 0",
+      "mutation": "extra thrust and higher top speed while held; meter drains",
+      "feedback": "FOV kick, speed lines, whoosh",
+      "rejection": "no effect when empty"
+    },
+    {
+      "id": "pads",
+      "source": "authored",
+      "input": "drive over boost pad",
+      "precondition": "not airborne",
+      "mutation": "timed surge, meter +20%",
+      "feedback": "whoosh, flash",
+      "rejection": "per-pad cooldown"
+    },
+    {
+      "id": "ramps and falls",
+      "source": "authored",
+      "input": "drive up a ramp or off the waterfall lip",
+      "precondition": "speed over ramp",
+      "mutation": "vertical velocity, airborne state, air-time score on landing",
+      "feedback": "camera lift, landing splash",
+      "rejection": "none"
+    },
+    {
+      "id": "collisions",
+      "source": "authored",
+      "input": "contact with rock, bank or rival",
+      "precondition": "swept overlap",
+      "mutation": "velocity reflected/damped, combo reset on rock/bank",
+      "feedback": "scrape sound, shake, spray",
+      "rejection": "none"
+    },
+    {
+      "id": "recovery",
+      "source": "authored",
+      "input": "R or automatic when stuck > 2.5 s",
+      "precondition": "race running",
+      "mutation": "placed on centerline at last progress, speed zero, +2 s penalty",
+      "feedback": "fade",
+      "rejection": "cooldown 1 s"
+    }
+  ],
+  "invariants": [
+    "Gates count only in order; each gate resolves exactly once (passed or missed)",
+    "Each sun pickup awards once per race",
+    "Score never decreases; combo resets on rock/bank hit or missed gate",
+    "Boat stays inside the river corridor at boosted speed (swept collision)",
+    "Progress is monotonic for finish detection; finish requires all gates resolved",
+    "Restart restores the exact initial state (deterministic sim: same inputs -> same result)",
+    "An autopilot using only the public input struct can finish the course"
+  ],
+  "levels": [
+    {
+      "id": "red-river",
+      "source": "app/src/game/course.ts",
+      "description": "~2.4 km point-to-point river: start basin, S-bends, rapids with rocks, narrow gorge, ramp, waterfall drop, lagoon finish"
+    }
+  ],
+  "assumptions": [
+    "A single still cannot show rules; all mechanics are authored",
+    "Timer in reference is treated as elapsed race time",
+    "Score in reference motivates pickups/gates/combo"
+  ]
+}

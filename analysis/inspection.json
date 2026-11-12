@@ -1,0 +1,14 @@
+[
+  {
+    "reference_id": "ref-001",
+    "kind": "image",
+    "inspection": "metadata-read",
+    "size": [
+      1150,
+      648
+    ],
+    "format": "PNG",
+    "mode": "RGBA",
+    "embedded_icc": true
+  }
+]

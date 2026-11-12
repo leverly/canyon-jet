@@ -1,0 +1,24 @@
+Canyon Jet: Red River Rush - handoff snapshot
+
+State of the source
+- app/ type-checks (tsc --noEmit) and all 13 rule tests pass (npm test).
+- Last visually reviewed build: review/wip/a7.png, a8.png, cmp7.png (spray sheets, rock joints, framing plants).
+- Edits made after that review and NOT yet seen in a browser: crew lean/brace animation (world/boat.ts),
+  side waterfalls on lower terraces and the start arch (world/props.ts, world/terrain.ts anchors),
+  20 fps step cap and yawRate in the probe (main.ts), finish banner flipped to face approaching boats.
+- No production build was made after those edits.
+
+Verification still open
+- scripts/playthrough.mjs (real keyboard events against the preview server) never ran to completion:
+  software WebGL on the build VM renders 1-5 fps at quality 1, so a full race takes far too long.
+  Only its first three checks passed (title, countdown start, no movement before GO).
+  Run it on a machine with a GPU, or at CJ_W=480 CJ_H=270 CJ_Q=0 CJ_NOREC=1.
+- Performance is unmeasured on real hardware; every fps number so far is SwiftShader.
+- review.json checks are all still pending; nothing has been frozen or attested.
+
+Known visual gaps against ref-001
+- Boat and crew are simplified procedural models; no faces.
+- Rock lacks the painted detail of the reference; spray is smaller and less curled.
+- Chase camera sits further back and more centred than the reference frame.
+
+Dropped from this archive: app/node_modules, app/dist, review/playthrough/frames.
